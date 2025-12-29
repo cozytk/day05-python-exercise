@@ -1,0 +1,26 @@
+# Day 05 실습용 docker-compose.yml
+services:
+  test:
+    image: day05-exercise:latest
+    build: .
+    volumes:
+      - .:/app
+    command: pytest -v --tb=short
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+
+  test-single:
+    image: day05-exercise:latest
+    build: .
+    volumes:
+      - .:/app
+    entrypoint: ["pytest"]
+
+  shell:
+    image: day05-exercise:latest
+    build: .
+    volumes:
+      - .:/app
+    command: python
+    stdin_open: true
+    tty: true
