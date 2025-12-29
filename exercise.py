@@ -151,8 +151,7 @@ def query_to_dataframe(conn: sqlite3.Connection, query: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 쿼리 결과
     """
-    # TODO: pd.read_sql_query 사용
-    pass
+    return pd.read_sql_query(query, conn)
 
 
 def dataframe_to_table(conn: sqlite3.Connection, df: pd.DataFrame,
@@ -165,9 +164,7 @@ def dataframe_to_table(conn: sqlite3.Connection, df: pd.DataFrame,
         table_name: 테이블 이름
         if_exists: 'fail', 'replace', 'append'
     """
-    # TODO: df.to_sql 사용
-    # 힌트: index=False 권장
-    pass
+    df.to_sql(table_name, conn, if_exists=if_exists, index=False)
 
 
 def analyze_orders(conn: sqlite3.Connection) -> pd.DataFrame:
@@ -176,10 +173,16 @@ def analyze_orders(conn: sqlite3.Connection) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 월별 주문 수, 총 매출
     """
-    # TODO: SQL로 기본 데이터 추출 후 Pandas로 월별 집계
-    # 힌트: strftime('%Y-%m', order_date) 사용 (SQL)
-    # 또는 pd.to_datetime 후 dt.to_period('M') 사용 (Pandas)
-    pass
+    query = """
+        SELECT
+            strftime('%Y-%m', order_date) AS month,
+            COUNT(*) AS order_count,
+            SUM(amount) AS total_revenue
+        FROM orders
+        GROUP BY strftime('%Y-%m', order_date)
+        ORDER BY month
+    """
+    return pd.read_sql_query(query, conn)
 
 
 # ============================================================
