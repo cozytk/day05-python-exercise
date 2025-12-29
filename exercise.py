@@ -25,10 +25,19 @@ def get_connection(db_path: str = ':memory:'):
     Yields:
         sqlite3.Connection: DB 연결 객체
     """
-    # TODO: 연결 생성, yield, 예외 시 rollback, 정상 시 commit, finally에서 close
-    # 힌트: conn = sqlite3.connect(db_path)
-    # 힌트: conn.row_factory = sqlite3.Row 설정 권장
-    pass
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
 
 
 def create_tables(conn: sqlite3.Connection) -> None:
@@ -38,8 +47,26 @@ def create_tables(conn: sqlite3.Connection) -> None:
     - users: id, name, email, created_at
     - orders: id, user_id, product, amount, order_date
     """
-    # TODO: CREATE TABLE IF NOT EXISTS 사용
-    pass
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            order_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    conn.commit()
 
 
 def insert_user(conn: sqlite3.Connection, name: str, email: str) -> int:
@@ -48,9 +75,13 @@ def insert_user(conn: sqlite3.Connection, name: str, email: str) -> int:
     Returns:
         int: 삽입된 사용자 ID
     """
-    # TODO: INSERT 후 lastrowid 반환
-    # 힌트: 파라미터 바인딩 사용 (?, ?)
-    pass
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)",
+        (name, email)
+    )
+    conn.commit()
+    return cursor.lastrowid
 
 
 def insert_order(conn: sqlite3.Connection, user_id: int, product: str, amount: int) -> int:
@@ -59,8 +90,13 @@ def insert_order(conn: sqlite3.Connection, user_id: int, product: str, amount: i
     Returns:
         int: 삽입된 주문 ID
     """
-    # TODO: INSERT 후 lastrowid 반환
-    pass
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO orders (user_id, product, amount) VALUES (?, ?, ?)",
+        (user_id, product, amount)
+    )
+    conn.commit()
+    return cursor.lastrowid
 
 
 def get_user_orders(conn: sqlite3.Connection, user_id: int) -> List[Dict]:
@@ -69,9 +105,15 @@ def get_user_orders(conn: sqlite3.Connection, user_id: int) -> List[Dict]:
     Returns:
         List[Dict]: 주문 정보 딕셔너리 리스트
     """
-    # TODO: JOIN을 사용하여 사용자와 주문 정보 조회
-    # 힌트: users JOIN orders ON users.id = orders.user_id
-    pass
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT u.name, o.product, o.amount, o.order_date
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        WHERE u.id = ?
+        ORDER BY o.order_date
+    """, (user_id,))
+    return [dict(row) for row in cursor.fetchall()]
 
 
 def get_order_summary(conn: sqlite3.Connection) -> List[Dict]:
@@ -80,9 +122,19 @@ def get_order_summary(conn: sqlite3.Connection) -> List[Dict]:
     Returns:
         List[Dict]: 사용자별 주문 수, 총 금액
     """
-    # TODO: GROUP BY를 사용하여 사용자별 집계
-    # 컬럼: user_id, user_name, order_count, total_amount
-    pass
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            COUNT(o.id) AS order_count,
+            SUM(o.amount) AS total_amount
+        FROM users u
+        LEFT JOIN orders o ON u.id = o.user_id
+        GROUP BY u.id, u.name
+        ORDER BY total_amount DESC
+    """)
+    return [dict(row) for row in cursor.fetchall()]
 
 
 # ============================================================
