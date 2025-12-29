@@ -198,8 +198,8 @@ def extract_from_json(file_path: str) -> List[Dict]:
     Returns:
         List[Dict]: 추출된 데이터
     """
-    # TODO: json.load 사용
-    pass
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 def transform_data(raw_data: List[Dict]) -> pd.DataFrame:
@@ -211,11 +211,10 @@ def transform_data(raw_data: List[Dict]) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 변환된 데이터
     """
-    # TODO: DataFrame 변환 및 정제
-    # - 날짜 컬럼 변환 (있다면)
-    # - 필요시 컬럼명 변경
-    # - NULL 처리
-    pass
+    df = pd.DataFrame(raw_data)
+    # NULL 처리
+    df = df.fillna('')
+    return df
 
 
 def validate_data(df: pd.DataFrame, required_columns: List[str]) -> Tuple[bool, List[str]]:
@@ -228,11 +227,25 @@ def validate_data(df: pd.DataFrame, required_columns: List[str]) -> Tuple[bool, 
     Returns:
         Tuple[bool, List[str]]: (검증 통과 여부, 오류 메시지 리스트)
     """
-    # TODO: 다음 검증 수행
-    # 1. 필수 컬럼 존재 여부
-    # 2. NULL 값 검사
-    # 3. 중복 검사 (첫 번째 컬럼 기준)
-    pass
+    errors = []
+
+    # 필수 컬럼 검사
+    missing = set(required_columns) - set(df.columns)
+    if missing:
+        errors.append(f"누락된 컬럼: {missing}")
+
+    # NULL 검사
+    if df.isnull().any().any():
+        null_cols = df.columns[df.isnull().any()].tolist()
+        errors.append(f"NULL 포함 컬럼: {null_cols}")
+
+    # 중복 검사
+    if len(df.columns) > 0:
+        first_col = df.columns[0]
+        if df[first_col].duplicated().any():
+            errors.append(f"중복 값 발견: {first_col}")
+
+    return len(errors) == 0, errors
 
 
 def load_to_database(conn: sqlite3.Connection, df: pd.DataFrame,
@@ -247,8 +260,8 @@ def load_to_database(conn: sqlite3.Connection, df: pd.DataFrame,
     Returns:
         int: 적재된 행 수
     """
-    # TODO: df.to_sql로 저장 후 행 수 반환
-    pass
+    df.to_sql(table_name, conn, if_exists='replace', index=False)
+    return len(df)
 
 
 class ETLPipeline:
@@ -269,10 +282,26 @@ class ETLPipeline:
         Returns:
             Dict: 실행 결과 (success, rows_loaded, errors)
         """
-        # TODO: Extract → Transform → Validate → Load 구현
-        # 힌트: 각 단계 함수 호출
-        # 검증 실패 시 {'success': False, 'errors': [...]} 반환
-        pass
+        try:
+            # Extract
+            raw_data = extract_from_json(source_file)
+
+            # Transform
+            df = transform_data(raw_data)
+
+            # Validate
+            valid, errors = validate_data(df, required_columns)
+            if not valid:
+                return {'success': False, 'errors': errors, 'rows_loaded': 0}
+
+            # Load
+            with get_connection(self.db_path) as conn:
+                rows = load_to_database(conn, df, table_name)
+
+            return {'success': True, 'errors': [], 'rows_loaded': rows}
+
+        except Exception as e:
+            return {'success': False, 'errors': [str(e)], 'rows_loaded': 0}
 
 
 # ============================================================
