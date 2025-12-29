@@ -323,9 +323,19 @@ def batch_insert(conn: sqlite3.Connection, data: List[Tuple],
     Returns:
         int: 삽입된 행 수
     """
-    # TODO: executemany를 사용하여 배치 단위로 삽입
-    # 힌트: 배치마다 commit
-    pass
+    cursor = conn.cursor()
+    cols = ', '.join(columns)
+    placeholders = ', '.join(['?' for _ in columns])
+    sql = f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})"
+
+    total = 0
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i+batch_size]
+        cursor.executemany(sql, batch)
+        conn.commit()
+        total += len(batch)
+
+    return total
 
 
 # ============================================================
